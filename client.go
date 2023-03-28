@@ -181,6 +181,36 @@ func (c *Client) ConnectToBind(addr *netutil.PortAddr, local *net.TCPAddr) error
 	return nil
 }
 
+func (c *Client) ConnectToProxy(proxyHost string, proxyPort int) error {
+	c.Disconnect()
+
+	var server *netutil.PortAddr
+
+	// try to initialize the directory cache
+	if !steamDirectoryCache.IsInitialized() {
+		_ = steamDirectoryCache.Initialize()
+	}
+	if steamDirectoryCache.IsInitialized() {
+		server = steamDirectoryCache.GetRandomCM()
+	} else {
+		server = GetRandomCM()
+	}
+
+	conn, err := dialTCPWithProxy(server.ToTCPAddr(), proxyHost, proxyPort)
+	if err != nil {
+		c.Fatalf("Connect to proxy failed failed: %v", err)
+		return err
+	}
+
+	c.conn = conn
+	c.writeChan = make(chan protocol.IMsg, 5)
+
+	go c.readLoop()
+	go c.writeLoop()
+
+	return nil
+}
+
 func (c *Client) Disconnect() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()

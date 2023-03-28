@@ -3,6 +3,7 @@ package steam
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -34,6 +35,41 @@ func dialTCP(laddr, raddr *net.TCPAddr) (*tcpConnection, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return &tcpConnection{
+		conn: conn,
+	}, nil
+}
+
+func dialTCPWithProxy(addr *net.TCPAddr, proxyHost string, proxyPort int) (*tcpConnection, error) {
+	conn, err := net.DialTCP("tcp", nil, &net.TCPAddr{
+		IP:   net.ParseIP(proxyHost),
+		Port: proxyPort,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	addrString := addr.String()
+	auth := base64.StdEncoding.EncodeToString([]byte("username:password"))
+
+	req := "CONNECT " + addrString + " HTTP/1.1\r\n"
+	req += "Proxy-Authorization: Basic " + auth + "\r\n"
+	req += "\r\n"
+
+	_, err = conn.Write([]byte(req))
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Test incoming response
+	fmt.Println(string(buf))
 
 	return &tcpConnection{
 		conn: conn,
